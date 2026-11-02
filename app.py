@@ -256,23 +256,25 @@ def submit():
 
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
+    guess, label = scoring.score_to_label(combined_score)
 
     content_id = str(uuid.uuid4())
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
+        guess=guess,
         model_score=model_score,
         style_score=style_score,
         combined_score=combined_score,
+        label=label,
         word_count=word_count,
     )
 
-    # guess, confidence and label stay empty until Milestone 5.
     return jsonify({
         "content_id": content_id,
-        "guess": None,
-        "confidence": None,
-        "label": None,
+        "guess": guess,
+        "confidence": scoring.confidence(combined_score),
+        "label": label,
         "model_score": model_score,
         "style_score": style_score,
         "combined_score": combined_score,
@@ -282,10 +284,13 @@ def submit():
 @app.post("/appeal")
 def appeal():
     """
-    A writer says you got it wrong. ← TODO — Milestone 5
+    A writer says you got it wrong.
 
     Expects JSON:
-        {"content_id": "...", "reasoning": "..."}
+        {"content_id": "...", "creator_id": "...", "reasoning": "..."}
+
+    `creator_id` has to match the one the piece was submitted under, so
+    nobody can appeal someone else's work.
 
     Should:
       1. Check the content_id actually exists — `audit.entries_for(id)` tells
@@ -299,14 +304,78 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject(
+            "unknown", "invalid_json",
+            'Send a JSON object like {"content_id": "...", "creator_id": "...", '
+            '"reasoning": "..."}.',
+        )
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    if not isinstance(content_id, str) or not content_id.strip():
+        return _reject(
+            "unknown", "missing_content_id",
+            "Tell us which submission you're appealing: the content_id you got "
+            "back when you submitted.",
+        )
+    content_id = content_id.strip()
+
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return _reject(
+            "unknown", "missing_creator_id",
+            "Appeals need the creator_id the piece was submitted under.",
+            appeal_for=content_id,
+        )
+
+    reasoning = payload.get("reasoning")
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return _reject(
+            creator_id, "missing_reasoning",
+            "Tell us briefly why you think we got it wrong.",
+            appeal_for=content_id,
+        )
+    if len(reasoning) > config.MAX_CHARS:
+        return _reject(
+            creator_id, "reasoning_too_long",
+            f"Please keep your reasoning under {config.MAX_CHARS:,} characters.",
+            appeal_for=content_id,
+        )
+
+    # An appeal carries the content_id too, so the original decision
+    # is the one entry with no "event".
+    history = audit.entries_for(content_id)
+    decision = next((e for e in history if "event" not in e), None)
+    if decision is None:
+        return _reject(
+            creator_id, "unknown_content_id",
+            "We couldn't find a submission with that content_id. Check it matches "
+            "the one you got back when you submitted.",
+            status=404, appeal_for=content_id,
+        )
+    if decision.get("creator_id") != creator_id:
+        return _reject(
+            creator_id, "not_your_submission",
+            "Only the person who submitted this piece can appeal it.",
+            status=403, appeal_for=content_id,
+        )
+    if any(e.get("event") == "appeal" for e in history):
+        return _reject(
+            creator_id, "already_under_review",
+            "This piece is already under review, so there's no need to appeal again.",
+            status=409, appeal_for=content_id,
+        )
+
+    audit.log_appeal(content_id=content_id, creator_id=creator_id, reasoning=reasoning.strip())
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": (
+            "Thanks. Your appeal is recorded and a person will review this piece. "
+            "The original decision stays on record until then."
+        ),
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────

@@ -100,15 +100,45 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
     # Strict comparisons, as config.py describes: a score sitting exactly on a
     # threshold is unsure. combine_signals relies on that when it holds a
     # disagreement at the edge of the band.
     if score > config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
+        return "ai", LABELS["ai"]
     if score < config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "human", LABELS["human"]
+    return "unsure", LABELS["unsure"]
+
+
+# What a reader sees. "Both of our checks" is literally true for the human
+# and AI labels: combine_signals only lets a score out of the unsure band when
+# both signals point the same way.
+LABELS = {
+    "human": (
+        "We think a person wrote this. Both of our checks pointed that way."
+    ),
+    "unsure": (
+        "We can't tell either way. Our checks didn't give a clear answer, "
+        "which happens often with real human writing, so this is not an "
+        "accusation. If you'd like a person to look at it, you can ask for "
+        "a review."
+    ),
+    "ai": (
+        "This looks a lot like AI-generated writing. Both of our checks "
+        "pointed that way, but they can be wrong. If you wrote this "
+        "yourself, you can appeal and a person will review it."
+    ),
+}
+
+
+def confidence(score: float) -> float:
+    """
+    How far the score is from a coin flip: 0.0 at 0.5, 1.0 at either end.
+
+    The same meaning for every guess, so "confidence 0.8" always means "a long
+    way from undecided", whether the guess is human or AI.
+    """
+    return round(abs(score - 0.5) * 2, 4)
 
 
 def label_ranges() -> list[tuple[str, str]]:
