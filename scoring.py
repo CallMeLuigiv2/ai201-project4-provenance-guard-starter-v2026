@@ -51,12 +51,27 @@ def combine_signals(model_score: float, style_score: float) -> float:
 
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
+
+    **My rule: agree, or say unsure.**
+
+      - If both signals land on the same side of 0.5, they agree, and the
+        score is their weighted average.
+      - If they land on opposite sides, they disagree, and the average is
+        held inside the unsure band. Two methods disagreeing is uncertainty,
+        so it can neither accuse anyone nor clear anyone.
+
+    So the AI label needs both signals to say AI, and the human label needs
+    both to say human. Signal one alone can't accuse a plain writer.
     """
-    # TODO: replace this
-    return (
+    combined = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+    model_says_ai = model_score >= config.SIGNAL_MIDPOINT
+    style_says_ai = style_score >= config.SIGNAL_MIDPOINT
+    if model_says_ai != style_says_ai:
+        combined = min(max(combined, config.HUMAN_THRESHOLD), config.AI_THRESHOLD)
+    return round(combined, 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
@@ -86,9 +101,12 @@ def score_to_label(score: float) -> tuple[str, str]:
     milestone.
     """
     # TODO: replace this — thresholds are in config.py
-    if score >= config.AI_THRESHOLD:
+    # Strict comparisons, as config.py describes: a score sitting exactly on a
+    # threshold is unsure. combine_signals relies on that when it holds a
+    # disagreement at the edge of the band.
+    if score > config.AI_THRESHOLD:
         return "ai", "PLACEHOLDER — write the high-confidence AI label."
-    if score <= config.HUMAN_THRESHOLD:
+    if score < config.HUMAN_THRESHOLD:
         return "human", "PLACEHOLDER — write the high-confidence human label."
     return "unsure", "PLACEHOLDER — write the unsure label."
 

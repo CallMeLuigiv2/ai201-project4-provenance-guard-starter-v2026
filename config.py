@@ -67,6 +67,11 @@ MAX_CHARS = 20_000
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
 
+# My rule is "agree, or say unsure". A signal at or above this point says AI,
+# below it says human. When the two signals say different things, the combined
+# score is held inside the unsure band. See scoring.combine_signals.
+SIGNAL_MIDPOINT = 0.5
+
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0
