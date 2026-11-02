@@ -128,7 +128,10 @@ def punctuation_density(text: str) -> float:
 
     My version: clause-joining marks (, ; : – —) per 100 words. **Higher means
     more AI.** AI prose is full of "X, Y, and Z" lists and stacked clauses. It
-    scored 6–12 per 100 words in calibration, and my essays scored 0.5–3.5.
+    scored 6.8–12.1 per 100 words in calibration, and my essays 1.0–3.2.
+    Parentheses and quotation marks are left out on purpose: my essays use
+    them for citations, and counting them would make my own writing look
+    more like AI.
     """
     w = words(text)
     if not w:
