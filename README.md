@@ -39,6 +39,28 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+1. **It arrives.** A writer sends `POST /submit` with `{"text": "...", "creator_id": "..."}`.
+2. **The route checks it.** If `text` is missing, empty, or not a string, the
+   request is refused with a `400`. If it's under 40 words the writer is told
+   *"This text is too short to determine"*; over 20,000 characters, *"This text
+   is too long to determine."* Every refusal is written to the audit log as a
+   rejection, and nothing gets scored.
+3. **It gets an ID.** The service makes a `content_id`. That's the handle the
+   writer uses later if they want to appeal.
+4. **Signal one: the model.** gpt2 reads the first ~400 tokens (about 300 words)
+   and measures how predictable the text is. Predictable text scores closer to
+   1.0, which means more AI-like.
+5. **Signal two: style.** Without reading for meaning, it measures the text's
+   shape: how much sentence lengths vary, how varied the vocabulary is, and how
+   punctuation is used. Even, uniform text scores closer to 1.0.
+6. **Combine, then label.** `scoring.combine_signals` turns the two scores into
+   one. `scoring.score_to_label` maps that to one of three labels (human, unsure,
+   AI), written as a sentence a reader can understand. Wrongly accusing a human
+   is treated as the worse mistake, so the AI label needs strong evidence.
+7. **Log, answer, appeal.** The decision goes to `logs/audit.jsonl` with all nine
+   fields, and the writer gets the label back. If they disagree,
+   `POST /appeal` with their `content_id` moves the item to `under_review`. The
+   original decision stays in the log.
 
 
 ---
