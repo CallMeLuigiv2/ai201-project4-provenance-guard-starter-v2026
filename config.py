@@ -47,6 +47,16 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 DETECTOR_MAX_TOKENS = 400
 
 
+# ─── Input limits (Milestone 3) ──────────────────────────────────────────────
+# Below the minimum, neither signal has enough to go on, so the route says
+# "too short to determine" instead of guessing. Above the maximum it says "too
+# long to determine". Signal one only reads the first DETECTOR_MAX_TOKENS
+# anyway, so a huge text would mostly go unread.
+
+MIN_WORDS = 40
+MAX_CHARS = 20_000
+
+
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
 #

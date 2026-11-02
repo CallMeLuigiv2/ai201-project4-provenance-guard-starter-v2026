@@ -1,0 +1,12 @@
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "invalid_json"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "invalid_json"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "missing_creator_id"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "missing_creator_id"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "missing_text"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "missing_text"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "invalid_text"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "empty_text"}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "text_too_short", "word_count": 10}
+{"timestamp": "2026-11-02T02:29:44+00:00", "creator_id": "me", "event": "rejected", "status": "rejected", "reason": "text_too_long", "text_length": 25000}
+{"timestamp": "2026-11-02T02:30:18+00:00", "content_id": "d9d4f03b-627a-48e2-a601-a33b11dad5b2", "creator_id": "stanluigi", "guess": null, "model_score": 0.6568, "style_score": null, "combined_score": null, "label": null, "status": "decided", "word_count": 209}
+{"timestamp": "2026-11-02T02:30:19+00:00", "content_id": "bcc520e8-1795-468c-a55e-df8a97c594ad", "creator_id": "stanluigi", "guess": null, "model_score": 0.6568, "style_score": null, "combined_score": null, "label": null, "status": "decided", "word_count": 209}

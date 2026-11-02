@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -150,6 +151,12 @@ def health():
 
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
+def _reject(creator_id, reason: str, message: str, status: int = 400, **extra):
+    """Refuse a request, and leave a trace of it in the audit log."""
+    audit.log_rejection(creator_id=creator_id, reason=reason, **extra)
+    return jsonify({"error": reason, "message": message}), status
+
+
 @app.post("/submit")
 # @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
@@ -199,17 +206,69 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return _reject(
+            "unknown", "invalid_json",
+            'Send a JSON object like {"text": "...", "creator_id": "..."}.',
+        )
 
-    # TODO: delete this and build the route.
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return _reject(
+            "unknown", "missing_creator_id",
+            "Every submission needs a creator_id, so we know who sent it.",
+        )
+
+    text = payload.get("text")
+    if text is None:
+        return _reject(creator_id, "missing_text", "There's no text to look at.")
+    if not isinstance(text, str):
+        return _reject(creator_id, "invalid_text", "The text has to be a string.")
+    if not text.strip():
+        return _reject(creator_id, "empty_text", "The text is empty.")
+    if len(text) > config.MAX_CHARS:
+        return _reject(
+            creator_id, "text_too_long",
+            f"This text is too long to determine. Please submit "
+            f"{config.MAX_CHARS:,} characters or fewer.",
+            text_length=len(text),
+        )
+    word_count = len(text.split())
+    if word_count < config.MIN_WORDS:
+        return _reject(
+            creator_id, "text_too_short",
+            f"This text is too short to determine. Please submit at least "
+            f"{config.MIN_WORDS} words.",
+            word_count=word_count,
+        )
+
+    try:
+        model_score = detector.model_signal(text)
+    except detector.DetectorUnavailable:
+        return _reject(
+            creator_id, "detector_unavailable",
+            "The checker isn't available right now. Please try again later.",
+            status=503,
+        )
+
+    content_id = str(uuid.uuid4())
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        model_score=model_score,
+        word_count=word_count,
+    )
+
+    # guess, confidence, label and style_score stay empty until Milestones 4 and 5.
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": None,
+        "confidence": None,
+        "label": None,
+        "model_score": model_score,
+        "style_score": None,
+    })
 
 
 @app.post("/appeal")
