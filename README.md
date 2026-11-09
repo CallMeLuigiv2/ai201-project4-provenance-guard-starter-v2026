@@ -577,17 +577,108 @@ tell this person that four commas made us call their writing a machine's.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing doesn't get called AI | 0 of 11 labelled AI | 0 of 11 | 0 of 11 | 0 of 11 | **Met** |
+| 2. AI and human text score clearly apart | AI mean ≥ human mean + 0.30 | gap 0.191 | gap 0.191 | gap 0.191 | **Missed** |
+| 3. All three labels are reachable | all 3 labels appear | human, unsure | human, unsure | human, unsure | **Missed** |
+| 4. Appeals always work and get recorded | 5 of 5 + logged; made-up id → 404 | 5 of 5; 404 | 5 of 5; 404 | 5 of 5; 404 | **Met** |
+| 5. Bad input gets a clear answer | 7 of 7 → 400 with a message; 0 × 500; all logged | 7 of 7; 0; 7 | 7 of 7; 0; 7 | 7 of 7; 0; 7 | **Met** |
+
+The run is `python run_eval.py --label before`, and the full output is in
+`results/run_2026-11-09_0100_before.md`. **What was tested:**
+
+- **Criterion 1:** all 11 paragraphs of my two 2019 essays.
+- **Criterion 2:** 5 confirmed ChatGPT answers from the HC3 research dataset
+  against 5 paragraphs of *Attention Is All You Need* (Vaswani et al., 2017,
+  written before ChatGPT existed). Both were chosen by rules fixed before
+  anything was scored. I deliberately used none of the AI text I calibrated on
+  in unit 7, so this tests the detector on AI writing it has never seen.
+- **Criterion 3:** 3 of my paragraphs, 3 splices of a human answer and a
+  ChatGPT answer to the same question, and 3 HC3 ChatGPT answers.
+- **Criterion 4:** submit 5 paragraphs, appeal each one, and check the log
+  for `under_review`. Then appeal a made-up content_id.
+- **Criterion 5:** missing, empty, null and numeric `text`, 10 words, 25,000
+  characters, and a body that isn't JSON.
+
+Sources and selection rules are in `samples/SOURCES.md`.
+
+`run_eval.py` as given only calls `/submit` and only sends JSON, so it
+couldn't test criteria 4 or 5 in full. **I extended it.** It now has an
+`appeals` scenario that submits, appeals with the content_id that came back,
+checks the log, and tries a made-up id. It also sends a raw body that isn't
+JSON, and checks that every refusal landed in the log. The three trials are
+identical because gpt2 gives the same text the same score every time.
 
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
 
-```json
+Produced by `run_eval.py::main` and written by `run_eval.py::write_report` to
+`results/run_2026-11-09_0100_before.md`. This is criterion 2's AI side, trial
+1. Signal one scores four of the five above 0.93. Even so, three are held at
+exactly 0.650, and only one gets the AI label:
 
+```json
+[
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3,
+    "model_score": 0.9719,
+    "style_score": 0.3658,
+    "combined_score": 0.65,
+    "label": "We can't tell either way. Our checks didn't give a clear answer, which happens often with real human writing, so this is not an accusation. If you'd like a person to look at it, you can ask for a review.",
+    "reason": null,
+    "message": null,
+    "sent": "Sound mass is a term used to describe a type of texture in music that "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3,
+    "model_score": 0.9422,
+    "style_score": 0.4545,
+    "combined_score": 0.65,
+    "label": "We can't tell either way. Our checks didn't give a clear answer, which happens often with real human writing, so this is not an accusation. If you'd like a person to look at it, you can ask for a review.",
+    "reason": null,
+    "message": null,
+    "sent": "The Persian Wars were a series of conflicts fought between the Greek c"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3,
+    "model_score": 0.9309,
+    "style_score": 0.4633,
+    "combined_score": 0.65,
+    "label": "We can't tell either way. Our checks didn't give a clear answer, which happens often with real human writing, so this is not an accusation. If you'd like a person to look at it, you can ask for a review.",
+    "reason": null,
+    "message": null,
+    "sent": "Add-ons, also known as extensions or plug-ins, are small software prog"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.5738,
+    "model_score": 0.927,
+    "style_score": 0.6467,
+    "combined_score": 0.7869,
+    "label": "This looks a lot like AI-generated writing. Both of our checks pointed that way, but they can be wrong. If you wrote this yourself, you can appeal and a person will review it.",
+    "reason": null,
+    "message": null,
+    "sent": "A dredge is a piece of equipment that is used to remove sediment and d"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.2338,
+    "model_score": 0.7743,
+    "style_score": 0.4595,
+    "combined_score": 0.6169,
+    "label": "We can't tell either way. Our checks didn't give a clear answer, which happens often with real human writing, so this is not an accusation. If you'd like a person to look at it, you can ask for a review.",
+    "reason": null,
+    "message": null,
+    "sent": "Humanities are academic disciplines that study the human condition, us"
+  }
+]
 ```
 
 **Diagnoses**
@@ -606,7 +697,90 @@ that produced it:
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
+Thirteen failures: 11 broken attacks and 2 missed criteria. They fall into
+four patterns. One problem sits under most of them: **my combining rule needs
+both signals to agree before it will say AI, so the system is only as hard to
+fool as whichever signal is easiest to move, and signal two moves with
+formatting.**
 
+**Pattern A: one signal pushed to the human side, and the combining rule held
+it in unsure.** EV01, EV02, EV06, EV10, criterion 3, and the AI half of
+criterion 2.
+
+- **EV02, EV06 and EV10. Stage: signal two, then the combining rule.** EV02
+  chops AI text into short sentences, and EV06 pairs one very long sentence
+  with one very short one. Both push sentence-length spread past my "human"
+  end (0.85 and 1.19, against an anchor of 0.60), so that measure reads fully
+  human. EV10 repeats a stanza structure. Repeated lines drop vocabulary
+  variety to 0.50 and remove all clause punctuation, so two of the three
+  measures read fully human. Style lands at 0.38, 0.29 and 0.15, under 0.5,
+  while signal one still says AI (0.59, 0.57, 0.98). They disagree, so my rule
+  holds them in unsure. None of these edits changes what the text says, only
+  its shape.
+- **EV01. Stage: signal one, then the combining rule.** The attack targeted
+  signal two, expecting typos to raise word variety. They did (0.94), but my
+  vocabulary measure counts *more* variety as AI, so that backfired and style
+  read AI (0.76). The typos fooled **signal one** instead. Misspelled words are
+  tokens gpt2 doesn't expect, so perplexity went up and the model score fell
+  to 0.16. They disagree again, so it's unsure.
+- **Criterion 3, and the AI half of criterion 2. Stage: signal two, then the
+  combining rule.** On real ChatGPT text from HC3, signal one is excellent:
+  0.93–0.97 on four of five. Signal two reads four of the five as human
+  (0.37–0.46). The measured cause is vocabulary variety. HC3's ChatGPT scores
+  0.70–0.81, but my unit 7 calibration AI (Claude) scored 0.88–0.92, and I set
+  the "AI" end of that measure from Claude's text. The 2022 ChatGPT in HC3
+  repeats itself: the "sound mass" answer describes five composers in a row
+  with nearly the same sentence ("was known for his use of sound mass
+  techniques in his music"). So the measure points the
+  right way for one AI and the wrong way for another. The signals disagree,
+  and my rule holds three of these at **exactly 0.650**, the top edge of the
+  unsure band. Those three are criterion 3's AI texts, which is why the AI
+  label never appears.
+
+**Pattern B: both signals said AI, but the average stayed under 0.65.** EV03
+(0.666 and 0.565, average 0.616), EV07 (0.586 and 0.687, average 0.637), EV09
+(0.704 and 0.578, average 0.641), PI03 (0.594 and 0.558, average 0.576).
+**Stage: the label mapping.** My rule asks for two things before saying AI:
+both signals must agree, *and* the average must be above 0.65. I set 0.65 when
+my calibration AI scored 0.76–0.94. The attack set's AI paragraphs are short
+(55–110 words) and partly edited, so each signal reads "somewhat AI." The
+average of two somewhat-AI readings sits inside the band. Both signals agreeing
+is already the evidence my rule exists to demand, and the threshold then
+demands it a second time.
+
+**Pattern C: injected text changed the shape, not the instructions.** PI01
+and PI02. **Stage: the route, then signal one.** Nothing in my service reads
+instructions. But each injection added 15–18 words to a 27-word AI
+paragraph, so the route counted the injected words as content and the text
+cleared my 40-word minimum. Without the injection, the route would have
+refused both as too short. Then the injected lines (`SYSTEM:`,
+`guess=human`, `Ignore all previous instructions`) are tokens gpt2 doesn't
+expect. I tested this by removing them: PI02's model score goes from **0.204
+with the injection to 0.754 without it**. In PI02 the injection also nudged
+style from 0.33 to 0.48. Both signals ended up under 0.5 (0.20 and 0.48), so
+my rule let the human label through: "We think a person wrote this."
+
+**Pattern D: a heavy human editing pass.** EV05 (0.321 and 0.427, average
+0.374, unsure). **Stage: both signals.** Heavy editing really did change both
+properties the signals measure. I don't think there's a fix at the signal
+level that wouldn't also hit human writers, because by this point the text is
+partly human-written.
+
+**The human half of criterion 2. Stage: signal two.** The *Attention*
+paragraphs average 0.480. Technical prose has varied vocabulary (0.80–0.87)
+and lots of clause punctuation (4.4–9.7 per 100 words), the same features
+signal two treats as AI. Its vocabulary range overlaps HC3's ChatGPT almost
+exactly. So signal two partly measures polish and genre, not authorship. It
+was calibrated on one human writer (me, in plain student prose) and one AI
+(Claude). Against a different human and a different AI, both of its ends are
+in the wrong place.
+
+**What held, and why.** No human writing was accused in either run. Every
+scored false-positive attack and all 11 of my paragraphs had signal two on the
+human side, so the rule refused to accuse. The rule that lets evasions
+through is the same rule that protected every writer. The near miss is FP03:
+four added commas would have flipped it (see **Attack Run — Before**). That
+risk sits in the same place, the punctuation measure inside signal two.
 
 ---
 
