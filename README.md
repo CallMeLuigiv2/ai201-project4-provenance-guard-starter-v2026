@@ -980,13 +980,106 @@ evidence of that problem (see **What's Still Broken**).
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
+Ten attacks still get through and one criterion is still missed. They fall
+into three groups, plus two problems the runs exposed outside the detector
+itself. Scores are from the after run.
 
+**1. Shape edits pull signal two to the human side: EV02, EV03, EV06, EV09,
+EV10, PI03.** Signal one still says AI on all six (0.57–0.98). Signal two
+reads them as human (0.14–0.37), because chopped sentences, one long sentence
+next to one short one, or stanza-like repetition push sentence-length spread
+past the "human" end. So the rule holds them in unsure.
+
+- *What I'd do:* replace the hand-tuned style measures with a second
+  *model-based* signal that reads the text rather than its shape. For
+  example, how much predictability varies from sentence to sentence, which is
+  much harder to fake by reformatting. Short of that, I'd measure spread on
+  clauses instead of full stops, so breaking one sentence into four doesn't
+  count as variety.
+- *Why I stopped:* that's a rebuild of signal two, not one improvement. Any
+  version I tuned here would be tuned to this attack set, and I'd need a
+  fresh one to know it generalizes. And any change that makes signal two read
+  "more AI" moves FP03 and every plain writer closer to an accusation, which
+  is the opposite of what this project is for.
+
+**2. Typos fool signal one: EV01** (model 0.16, style 0.65, unsure).
+Misspelled words are tokens gpt2 doesn't expect, so they raise perplexity.
+
+- *What I'd do:* correct obvious misspellings before signal one scores the
+  text, so it judges the writing, not the typos.
+- *Why I stopped:* that cuts both ways. Correcting a real writer's typos makes
+  their text *more* predictable, so more AI-like on signal one. The writers who
+  make the most typos (second-language writers, dyslexic writers, people in a
+  hurry) are the ones I'd be pushing toward an accusation.
+
+**3. Both signals pushed to the human side, so the text is labelled human:
+EV05 (0.320), PI01 (0.231), PI02 (0.210).** This is the worst part of the
+after run, because the service affirmatively tells a reader "We think a
+person wrote this." PI01 and PI02 get there through their injected lines.
+Those lines add enough words to clear the 40-word minimum, and they're tokens
+gpt2 doesn't expect. EV05 is AI text after a heavy human edit.
+
+- *What I'd do:* two things. First, ignore instruction-shaped lines
+  (`SYSTEM:`, `Ignore all previous instructions`, `guess=human`) both when
+  counting words and when scoring, and flag any submission containing them
+  for a person to look at. Second, make the human label harder to reach than
+  0.35. I'd test 0.30, which would move EV05 back to unsure, and check what
+  it does to my own paragraphs that currently get the human label.
+- *Why I stopped:* a filter crude enough to write quickly would also delete
+  legitimate text, like an essay *about* prompt injection, or a story quoting
+  a computer. And moving the human line is another threshold tuned to the
+  same tests. For EV05 there's a real question whether a heavily human-edited
+  text is still "AI text" at all.
+
+**Criterion 2, still missed (gap 0.276 against 0.30).** The AI side is fixed
+(real ChatGPT now averages 0.766). The human side isn't: the *Attention*
+paragraphs average 0.490. Dense technical writing uses lots of clause
+punctuation, and signal two treats that as AI.
+
+- *What I'd do:* calibrate signal two's ends on a broad set of human writing
+  (technical, casual, student, second-language), not just my own essays.
+- *Why I stopped:* re-tuning it on the *Attention* paragraphs would just make
+  the test pass by fitting to it. The honest fix needs a human test set I
+  haven't tuned anything on, and I don't have one.
+
+**Outside the detector: the rate limiter and who a caller is.**
+
+- **Malformed requests share one allowance.** A request with no usable
+  `creator_id` is counted against the address it came from. All of those
+  from one place share 5 a minute. That's why RQ10 and RQ11 got 429 instead
+  of 400 in both attack runs, and why the first after-eval's non-JSON body
+  got 429. The limiter runs *before* my input checks, so a malformed request
+  can be told "too many submissions" when the real answer is "that isn't
+  JSON."
+- **`creator_id` is just text.** A script can invent a new one per request and
+  never be limited, and anyone who knows a writer's `creator_id` and a
+  `content_id` can appeal for them.
+- *What I'd do:* authorization. A secret key or a login identifies the
+  caller, limits count per real account, and only the account holder can
+  appeal. Until then, unidentified requests should get a separate, looser
+  allowance.
+- *Why I stopped:* the attack and eval tools send no credentials. With
+  authorization on, every request would get `401` and neither test would
+  measure the detector at all (see **Rate Limiting**).
+
+**FP03 is still four commas from an accusation.** This attack technically
+held, but it's the outcome I'd least want to defend. I'd never show the
+high-confidence AI label on a short, plainly written piece without a person
+looking at it first. That's a review step in the product, though, not
+something the scoring can fix, so I left it for the write-up.
 
 **The trade I'd make if this ran for real:**
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
 
+I'd keep the bar for an AI label high and accept that a lot of AI text will
+come back "unsure," or even "human," because a wrong accusation lands on one
+real person who may have no way to prove they wrote their own work. The
+people who pay are honest writers whose work sits next to AI text that got
+through and readers who trust the label, and I'd still choose that over
+telling a second-language writer that four commas made their life story look
+like a machine wrote it.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
