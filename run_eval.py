@@ -42,28 +42,72 @@ for _stream in (sys.stdout, sys.stderr):
 DEFAULT_URL = f"http://{config.HOST}:{config.PORT}"
 
 
+class RawBody(str):
+    """A body sent byte for byte while claiming to be JSON — for one that isn't."""
+
+
 def bodies_for(scenario):
     """
     The request bodies one scenario sends.
 
-    A "texts" scenario gets a creator_id made up for it. A "bodies" scenario is
-    sent exactly as written, which is how a bad-input criterion says things a
-    string can't — no `text` field, a null, something enormous.
+    A "texts" or "appeals" scenario gets a creator_id made up for it. A
+    "bodies" scenario is sent exactly as written, which is how a bad-input
+    criterion says things a string can't — no `text` field, a null, something
+    enormous — and its "raw_bodies" go out byte for byte.
     """
     if scenario.get("bodies"):
-        return list(scenario["bodies"])
+        return list(scenario["bodies"]) + [RawBody(r) for r in scenario.get("raw_bodies", [])]
+    texts = scenario.get("texts") or scenario.get("appeals")
     return [
         {"text": text, "creator_id": f"eval_{scenario['name'][:12]}_{i}"}
-        for i, text in enumerate(scenario["texts"], 1)
+        for i, text in enumerate(texts, 1)
     ]
 
 
 def describe(body):
     """A short, readable note of what was sent — for the report."""
+    if isinstance(body, RawBody):
+        return f"raw body: {body[:60]}"
     if set(body) == {"text", "creator_id"} and isinstance(body.get("text"), str):
         text = body["text"]
         return text[:70] if text else "(empty text)"
     return json.dumps(body)[:120]
+
+
+def post_submit(requests, args, body):
+    if isinstance(body, RawBody):
+        return requests.post(f"{args.url}/submit", data=body.encode("utf-8"),
+                             headers={"Content-Type": "application/json"},
+                             timeout=args.timeout)
+    return requests.post(f"{args.url}/submit", json=body, timeout=args.timeout)
+
+
+def log_size(requests, args):
+    return requests.get(f"{args.url}/health", timeout=args.timeout).json()["log_entries"]
+
+
+def appeal(requests, args, content_id, creator_id):
+    """
+    Appeal one content_id. Returns (status, whether the log now shows it
+    under_review) — the second half is the part a 200 alone can't prove.
+    """
+    response = requests.post(f"{args.url}/appeal", timeout=args.timeout, json={
+        "content_id": content_id,
+        "creator_id": creator_id,
+        "reasoning": "Eval run: checking the appeal path end to end.",
+    })
+    entries = requests.get(f"{args.url}/log", params={"limit": 20},
+                           timeout=args.timeout).json()["entries"]
+    logged = any(e.get("content_id") == content_id and e.get("event") == "appeal"
+                 and e.get("status") == "under_review" for e in entries)
+    return response.status_code, logged
+
+
+def short(result):
+    """One word per request for the console line."""
+    if "appeal_status" in result:
+        return f"{result.get('guess') or ''} appeal {result['appeal_status']}".strip()
+    return result.get("guess") or str(result.get("status"))
 
 
 def main():
@@ -116,25 +160,49 @@ def main():
             for i, body in enumerate(bodies_for(scenario), 1):
                 preview = describe(body)
                 try:
-                    response = requests.post(f"{args.url}/submit", json=body,
-                                             timeout=args.timeout)
-                    payload = response.json() if response.content else {}
-                    results.append({
+                    before = log_size(requests, args) if scenario.get("bodies") else None
+                    response = post_submit(requests, args, body)
+                    try:
+                        payload = response.json() if response.content else {}
+                    except ValueError:
+                        payload = {"reason": f"not JSON: {response.text[:80]}"}
+                    result = {
                         "status": response.status_code,
                         "guess": payload.get("guess"),
                         "confidence": payload.get("confidence"),
                         "model_score": payload.get("model_score"),
                         "style_score": payload.get("style_score"),
+                        "combined_score": payload.get("combined_score"),
                         "label": payload.get("label"),
+                        "reason": payload.get("error"),
+                        "message": payload.get("message"),
                         "sent": preview,
-                    })
+                    }
+                    # A bad-input criterion also says every refusal is logged.
+                    if before is not None:
+                        last = requests.get(f"{args.url}/log", params={"limit": 1},
+                                            timeout=args.timeout).json()["entries"]
+                        result["logged_as_rejection"] = (
+                            log_size(requests, args) == before + 1
+                            and bool(last) and last[-1].get("status") == "rejected"
+                        )
+                    if scenario.get("appeals") and payload.get("content_id"):
+                        result["appeal_status"], result["appeal_logged"] = appeal(
+                            requests, args, payload["content_id"], body["creator_id"])
+                    results.append(result)
                 except Exception as exc:  # noqa: BLE001
                     results.append({"status": None, "error": f"{type(exc).__name__}: {exc}",
                                     "sent": preview})
 
+            # And one appeal that must fail: a content_id that was never issued.
+            if scenario.get("appeals"):
+                status, _ = appeal(requests, args, f"made-up-content-id-{trial}",
+                                   "eval_appeals_fake")
+                results.append({"sent": "appeal on a made-up content_id",
+                                "appeal_status": status})
+
             trials.append(results)
-            guesses = [r.get("guess") or "—" for r in results]
-            print(f"  trial {trial}: {', '.join(guesses)}")
+            print(f"  trial {trial}: {', '.join(short(r) for r in results)}")
 
         rows.append({"scenario": scenario, "trials": trials})
 
