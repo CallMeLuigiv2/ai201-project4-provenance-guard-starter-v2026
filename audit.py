@@ -33,7 +33,7 @@ def _now() -> str:
 
 
 def log_decision(
-    content_id: str,
+    content_id: str | None,
     creator_id: str,
     guess: str | None = None,
     model_score: float | None = None,
@@ -81,15 +81,17 @@ def log_appeal(content_id: str, creator_id: str, reasoning: str) -> dict:
     decision stays exactly where it was and the appeal sits after it — which is
     the whole point of an audit log. Someone reading it later can see what was
     decided, that it was challenged, and in what order.
+
+    Written through log_decision so it carries all nine fields too, with the
+    scores and label left null. The decision above it already has them.
     """
-    return _append({
-        "timestamp": _now(),
-        "content_id": content_id,
-        "creator_id": creator_id,
-        "event": "appeal",
-        "status": "under_review",
-        "reasoning": reasoning,
-    })
+    return log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        status="under_review",
+        event="appeal",
+        reasoning=reasoning,
+    )
 
 
 def log_rejection(creator_id: str, reason: str, **extra) -> dict:
@@ -101,15 +103,19 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     **an attack that shows up only as an absence is one you'll never find.** A
     thousand requests that got a 429 and left no trace look exactly like a
     quiet afternoon.
+
+    Written through log_decision so every rejection has the same nine fields
+    as a decision. content_id, the scores and the label are null, because
+    nothing was decided.
     """
-    return _append({
-        "timestamp": _now(),
-        "creator_id": creator_id,
-        "event": "rejected",
-        "status": "rejected",
-        "reason": reason,
+    return log_decision(
+        content_id=None,
+        creator_id=creator_id,
+        status="rejected",
+        event="rejected",
+        reason=reason,
         **extra,
-    })
+    )
 
 
 def _append(entry: dict) -> dict:

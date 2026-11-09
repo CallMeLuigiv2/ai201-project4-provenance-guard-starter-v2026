@@ -349,7 +349,7 @@ committed until we'd agreed on it.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day
 
 **Why those numbers and not others:**
 <!-- Think about two people: a real writer submitting their own work a few
@@ -357,16 +357,72 @@ committed until we'd agreed on it.
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
+The per-minute limit is there for the real writer. Someone who just got
+"unsure" will edit a sentence and resubmit, maybe 3 or 4 times in a few
+minutes, and 5 covers that, plus a double-click or a retry. I considered going
+lower and decided against it. Lowering the per-minute limit hurts that writer
+right when it matters, and it barely slows a script, which can just space its
+requests out. Below 3 it would also break my own eval run: `run_eval.py` sends
+each text under the same `creator_id` once per trial, three times within a
+minute.
+
+The per-day limit is there for the script. A heavy day of real use is 20–30
+submissions, so 50 leaves room. A script sending a thousand variations to map
+my thresholds gets 50 a day per account, which turns an afternoon's job into
+weeks.
+
 **What a caller counts as:** <!-- per address, or per creator_id? They fail
 differently — one script can look like a thousand callers, and one household
 can look like one. -->
+
+Per `creator_id` (`rate_limit_key` in `app.py`). Every submission must have
+one, so that's always the key. This works well for a household or classroom
+sharing one internet address: each writer has their own limit. But it fails
+against a script. `creator_id` is just text in the request, so a script can
+invent a new one for every request and never hit the limit. One script can
+look like a thousand callers.
+
+Limiting per address instead would fail the other way: a whole classroom
+behind one school network would share 5 a minute. And all my testing comes
+from one laptop, so a per-address limit would also block my own attack and
+eval runs.
+
+The real fix is authorization. Each writer gets a secret key or logs in, and
+the server works out who's calling from that instead of trusting a field in
+the request. Then the limit counts per real account, and making up a new name
+doesn't reset it. That would also make my appeal rule truly airtight. Today
+"only the submitter can appeal" just checks that the appealer typed the same
+`creator_id`. I didn't build authorization in this unit because the attack and
+eval tools send no credentials, so every request would come back `401` and
+the tests would measure nothing.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
+`python run_attacks.py --flood 15` (from `results/flood_2026-11-09_0029.md`):
+
+```
+400 400 400 400 400 429 429 429 429 429 429 429 429 429 429
 ```
 
+The first five are `400`, not `200`, because the flood tool's text is 27
+words long and my service refuses anything under 40 words as "too short to
+determine." They still count against the limit, so a script can't get around
+it by sending junk, and the limit kicks in at the 6th request.
+
+To show the switch from `200` to `429` with text that actually gets scored,
+I sent the same 426-word paragraph 8 times under one `creator_id`:
+
+```
+200 200 200 200 200 429 429 429
+```
+
+Every rejection is in the audit log with all nine fields, so a flood leaves a
+trace instead of an absence:
+
+```json
+{"timestamp": "2026-11-09T05:30:03+00:00", "content_id": null, "creator_id": "flood_tester_long", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
 ---
