@@ -87,7 +87,13 @@ SIGNAL_MIDPOINT = 0.5
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.35
-AI_THRESHOLD = 0.65
+
+# 0.65 in unit 7. Lowered to 0.62 in unit 8, together with dropping the
+# vocabulary measure from the style signal. Every line from 0.62 down to 0.56
+# caught the same attacks; at 0.55 a human paragraph (from "Attention Is All
+# You Need") was accused. 0.62 is the top of that range, so it leaves the
+# widest margin before anyone is accused. See README, The Improvement.
+AI_THRESHOLD = 0.62
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub

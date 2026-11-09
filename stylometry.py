@@ -100,6 +100,14 @@ def type_token_ratio(text: str) -> float:
     calibration, AI paragraphs scored 0.88–0.92 and my own essays 0.72–0.83:
     modern models swap in synonyms, and plain human writing repeats its key
     terms.
+
+    ⚠️ **No longer part of style_signal (unit 8).** Its direction turned out to
+    depend on which AI wrote the text. My calibration AI (Claude) scored
+    0.88–0.92, but real ChatGPT answers from the HC3 dataset scored 0.70–0.81,
+    because that ChatGPT repeats itself. A human technical paper scored
+    0.80–0.87, right in the middle. A measure that points different ways for
+    different writers is noise, so it's still computed (and printed below)
+    but no longer counted.
     """
     w = words(text)
     if not w:
@@ -164,13 +172,14 @@ def style_signal(text: str) -> float:
     to signal one, and it is plain writing that gets accused.
 
     My version: each measure is put on a 0–1 ramp between a "human" end and an
-    "AI" end (see ANCHORS), then the three are averaged with equal weight.
-    The ends are round numbers just outside where my calibration texts landed.
+    "AI" end (see ANCHORS), then averaged with equal weight. The ends are
+    round numbers just outside where my calibration texts landed.
+
+    Since unit 8 that's two measures, sentence-length spread and clause
+    punctuation. Vocabulary variety was dropped because its direction depends
+    on which AI wrote the text (see type_token_ratio).
     """
-    parts = [
-        _ramp(type_token_ratio(text), *ANCHORS["type_token_ratio"]),
-        _ramp(punctuation_density(text), *ANCHORS["punctuation_density"]),
-    ]
+    parts = [_ramp(punctuation_density(text), *ANCHORS["punctuation_density"])]
     # One sentence has no spread to measure. That's no evidence either way,
     # so it counts as neither human nor AI.
     if len(sentences(text)) >= 2:
@@ -184,7 +193,6 @@ def style_signal(text: str) -> float:
 # at the AI end 1.0, and anything past either end is clipped.
 ANCHORS = {
     "sentence_length_spread": (0.60, 0.15),   # even sentences -> AI
-    "type_token_ratio": (0.75, 0.92),         # more varied words -> AI
     "punctuation_density": (1.0, 9.0),        # more clause punctuation -> AI
 }
 
